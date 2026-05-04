@@ -6,7 +6,7 @@ import http
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
-WS_PORT = int(os.environ.get("PORT", 7788))
+WS_PORT = process.env.PORT || 7788
 
 # --- MANEJADOR DE HEALTH CHECKS (Para Render) ---
 async def process_request(connection, request):
