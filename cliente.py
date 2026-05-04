@@ -1,56 +1,47 @@
 import asyncio
 import json
 import websockets
-import os
-import http
-import logging  # <-- Nueva librería
-from datetime import datetime
-
-# --- SILENCIAR RUIDO DE INTERNET ---
-# Esto evita que websockets imprima errores gigantes cuando Render o bots escanean el puerto
-logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
-logging.getLogger("websockets.protocol").setLevel(logging.CRITICAL)
 
 # --- CONFIGURACIÓN ---
-WS_PORT = int(os.environ.get("PORT", 7788))
+# Usando una IP del rango 74.220.48.0/24
+SERVER_IP = "74.220.48.0"
+SERVER_PORT = "7788"
+URI = f"ws://{SERVER_IP}:{SERVER_PORT}"
 
-# --- MANEJADOR DE HEALTH CHECKS (Para Render) ---
-async def process_request(connection, request):
-    if request.path == "/":
-        return connection.respond(http.HTTPStatus.OK, "Servidor WebSocket OK\n")
-    return None
-
-async def handle_terminal(websocket):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo conectado.")
+async def run_client():
+    print(f"Intentando conectar al servidor en {URI}...")
     try:
-        async for message in websocket:
-            print(f"\n--- Mensaje Recibido ({datetime.now().strftime('%H:%M:%S')}) ---")
-            print(message)
-            
-            try:
-                data = json.loads(message)
-                if data.get("cmd") == "reg":
-                    res = {
-                        "ret": "reg",
-                        "result": True,
-                        "cloudtime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "nosenduser": True
-                    }
-                    await websocket.send(json.dumps(res))
-                    print(">>> Respuesta de registro enviada.")
-            except json.JSONDecodeError:
-                print("Error: El mensaje recibido no es un JSON válido.")
+        # Intentar establecer conexión con el servidor
+        async with websockets.connect(URI) as websocket:
+            print("✅ ¡Conectado exitosamente al servidor!")
 
-    except websockets.exceptions.ConnectionClosed:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo desconectado.")
+            # Armar un paquete de datos simulando tu equipo AiFace
+            datos_registro = {
+                "cmd": "reg",
+                "sn": "AXTG-SIMULADOR",
+                "devinfo": {
+                    "modelname": "AiFace-Test",
+                    "cpu_temp": 45.5,
+                    "mac": "AA-BB-CC-DD-EE-FF"
+                }
+            }
 
-async def main():
-    print(f"Servidor iniciado en el puerto {WS_PORT}. Esperando datos...")
-    async with websockets.serve(handle_terminal, "0.0.0.0", WS_PORT, process_request=process_request):
-        await asyncio.Future()
+            # Enviar los datos al servidor
+            mensaje_json = json.dumps(datos_registro)
+            await websocket.send(mensaje_json)
+            print(f">>> Mensaje enviado: {mensaje_json}")
+
+            # Esperar la respuesta del servidor
+            respuesta = await websocket.recv()
+            print(f"<<< Respuesta del servidor: {respuesta}")
+
+    except ConnectionRefusedError:
+        print(f"❌ Error: Conexión rechazada. ¿Está el servidor corriendo en {SERVER_IP}:{SERVER_PORT}?")
+    except TimeoutError:
+        print(f"❌ Error: Tiempo de espera agotado (Timeout). Revisa reglas de Firewall para {SERVER_IP}.")
+    except Exception as e:
+        print(f"❌ Error inesperado: {e}")
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nServidor detenido por el usuario.")
+    # Ejecutar la rutina asíncrona
+    asyncio.run(run_client())
