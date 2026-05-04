@@ -1,33 +1,42 @@
-import asyncio
 import json
-import websockets
+import logging
 import os
-import http
 from datetime import datetime
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import uvicorn
 
+# --- CONFIGURACIÓN DE LOGS ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURACIÓN ---
-WS_PORT = int(os.environ.get("PORT", 7788))
-# --- MANEJADOR DE HEALTH CHECKS (Para Render) ---
-async def process_request(connection, request):
-    # Si Render envía un HTTP GET a la raíz ("/") para ver si estamos vivos
-    if request.path == "/":
-        # Le respondemos con un 200 OK para que Render se quede tranquilo
-        return connection.respond(http.HTTPStatus.OK, "Servidor WebSocket OK\n")
-    # Si no es la raíz, devolvemos None para continuar con la conexión WebSocket normal
-    return None
+app = FastAPI()
 
-async def handle_terminal(websocket):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo conectado.")
+# --- RUTAS HTTP (Health Check para Render) ---
+@app.get("/")
+async def root():
+    # Render recibirá este JSON y sabrá que tu app está viva
+    return {"status": "ok", "message": "Servidor AiFace Online"}
+
+# --- RUTAS WEBSOCKET (Para tu equipo Biométrico) ---
+# Nota: Uso "/" asumiendo que el equipo se conecta a la raíz. 
+# Si tu cliente apunta a "/ws", cámbialo a @app.websocket("/ws")
+@app.websocket("/")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    logger.info(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo conectado.")
+    
     try:
-        async for message in websocket:
-            print(f"\n--- Mensaje Recibido ({datetime.now().strftime('%H:%M:%S')}) ---")
-            print(message)
+        while True:
+            # 1. Leer el mensaje como texto
+            message = await websocket.receive_text()
+            logger.info(f"\n--- Mensaje Recibido ({datetime.now().strftime('%H:%M:%S')}) ---")
+            logger.info(message)
             
+            # 2. Procesar el JSON del equipo
             try:
                 data = json.loads(message)
+                
+                # 3. Responder al comando de registro ("reg")
                 if data.get("cmd") == "reg":
                     res = {
                         "ret": "reg",
@@ -35,22 +44,82 @@ async def handle_terminal(websocket):
                         "cloudtime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "nosenduser": True
                     }
-                    await websocket.send(json.dumps(res))
-                    print(">>> Respuesta de registro enviada.")
+                    # Enviar la respuesta convertida a string JSON
+                    await websocket.send_text(json.dumps(res))
+                    logger.info(">>> Respuesta de registro enviada.")
+                    
             except json.JSONDecodeError:
-                print("Error: El mensaje recibido no es un JSON válido.")
+                logger.error("Error: El mensaje recibido no es un JSON válido.")
 
-    except websockets.exceptions.ConnectionClosed:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo desconectado.")
+    except WebSocketDisconnect:
+        logger.info(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo desconectado.")
 
-async def main():
-    print(f"Servidor iniciado en el puerto {WS_PORT}. Esperando datos...")
-    # ATENCIÓN: Aquí agregamos "process_request=process_request"
-    async with websockets.serve(handle_terminal, "0.0.0.0", WS_PORT, process_request=process_request):
-        await asyncio.Future()
-
+# --- ARRANQUE DEL SERVIDOR ---
 if __name__ == "__main__":
+    # Lee el puerto dinámico de Render (o usa 7788 si estás en tu PC local)
+    port = int(os.environ.get("PORT", 7788))
+    
+    # Inicia el servidor usando uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)import json
+import logging
+import os
+from datetime import datetime
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import uvicorn
+
+# --- CONFIGURACIÓN DE LOGS ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI()
+
+# --- RUTAS HTTP (Health Check para Render) ---
+@app.get("/")
+async def root():
+    # Render recibirá este JSON y sabrá que tu app está viva
+    return {"status": "ok", "message": "Servidor AiFace Online"}
+
+# --- RUTAS WEBSOCKET (Para tu equipo Biométrico) ---
+# Nota: Uso "/" asumiendo que el equipo se conecta a la raíz. 
+# Si tu cliente apunta a "/ws", cámbialo a @app.websocket("/ws")
+@app.websocket("/")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    logger.info(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo conectado.")
+    
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nServidor detenido por el usuario.")
+        while True:
+            # 1. Leer el mensaje como texto
+            message = await websocket.receive_text()
+            logger.info(f"\n--- Mensaje Recibido ({datetime.now().strftime('%H:%M:%S')}) ---")
+            logger.info(message)
+            
+            # 2. Procesar el JSON del equipo
+            try:
+                data = json.loads(message)
+                
+                # 3. Responder al comando de registro ("reg")
+                if data.get("cmd") == "reg":
+                    res = {
+                        "ret": "reg",
+                        "result": True,
+                        "cloudtime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "nosenduser": True
+                    }
+                    # Enviar la respuesta convertida a string JSON
+                    await websocket.send_text(json.dumps(res))
+                    logger.info(">>> Respuesta de registro enviada.")
+                    
+            except json.JSONDecodeError:
+                logger.error("Error: El mensaje recibido no es un JSON válido.")
+
+    except WebSocketDisconnect:
+        logger.info(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo desconectado.")
+
+# --- ARRANQUE DEL SERVIDOR ---
+if __name__ == "__main__":
+    # Lee el puerto dinámico de Render (o usa 7788 si estás en tu PC local)
+    port = int(os.environ.get("PORT", 7788))
+    
+    # Inicia el servidor usando uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)
