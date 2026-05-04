@@ -5,6 +5,9 @@ import os
 import http
 from datetime import datetime
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # --- CONFIGURACIÓN ---
 WS_PORT = int(os.environ.get("PORT", 7788))
 # --- MANEJADOR DE HEALTH CHECKS (Para Render) ---

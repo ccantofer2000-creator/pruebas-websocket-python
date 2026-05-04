@@ -4,7 +4,7 @@ import websockets
 
 # --- CONFIGURACIÓN ---
 # Usando una IP del rango 74.220.48.0/24
-SERVER_IP = "74.220.48.0"
+SERVER_IP = "pruebas-websocket-python.onrender.com"
 SERVER_PORT = "7788"
 URI = f"ws://{SERVER_IP}:{SERVER_PORT}"
 
