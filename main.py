@@ -1,20 +1,29 @@
 import asyncio
 import json
 import websockets
+import os
+import http
 from datetime import datetime
 
 # --- CONFIGURACIÓN ---
-WS_PORT = 7788
+WS_PORT = int(os.environ.get("PORT", 7788))
+
+# --- MANEJADOR DE HEALTH CHECKS (Para Render) ---
+async def process_request(connection, request):
+    # Si Render envía un HTTP GET a la raíz ("/") para ver si estamos vivos
+    if request.path == "/":
+        # Le respondemos con un 200 OK para que Render se quede tranquilo
+        return connection.respond(http.HTTPStatus.OK, "Servidor WebSocket OK\n")
+    # Si no es la raíz, devolvemos None para continuar con la conexión WebSocket normal
+    return None
 
 async def handle_terminal(websocket):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Equipo conectado.")
     try:
         async for message in websocket:
-            # 1. Mostrar lo que envía el equipo en consola
             print(f"\n--- Mensaje Recibido ({datetime.now().strftime('%H:%M:%S')}) ---")
             print(message)
             
-            # 2. Responder al equipo (necesario para mantener el flujo del protocolo)
             try:
                 data = json.loads(message)
                 if data.get("cmd") == "reg":
@@ -34,8 +43,9 @@ async def handle_terminal(websocket):
 
 async def main():
     print(f"Servidor iniciado en el puerto {WS_PORT}. Esperando datos...")
-    async with websockets.serve(handle_terminal, "0.0.0.0", WS_PORT):
-        await asyncio.Future()  # Mantiene el servidor corriendo para siempre
+    # ATENCIÓN: Aquí agregamos "process_request=process_request"
+    async with websockets.serve(handle_terminal, "0.0.0.0", WS_PORT, process_request=process_request):
+        await asyncio.Future()
 
 if __name__ == "__main__":
     try:
