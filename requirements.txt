@@ -1,2 +1,2 @@
 #Instalación de librería websocket
-websockets==
+websockets==16.0
